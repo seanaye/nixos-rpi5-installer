@@ -1,4 +1,4 @@
-name: Build NixOS RPi5 Installer Image
+name: Build NixOS RPi5 Installer & Kodi System
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     branches: [main]
 
 jobs:
-  build:
+  build-installer:
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Maximize disk space
@@ -29,9 +29,47 @@ jobs:
           mkdir -p output
           cp result/sd-image/*.img.zst output/
 
-      - name: Upload artifact
+      - name: Upload installer image
         uses: actions/upload-artifact@v4
         with:
           name: nixos-rpi5-installer
           path: output/
+          retention-days: 90
+
+  build-kodi-system:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - name: Maximize disk space
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          sudo apt-get clean
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v30
+        with:
+          extra_nix_config: |
+            extra-substituters = https://nixos-raspberrypi.cachix.org
+            extra-trusted-public-keys = nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI=
+
+      - name: Build kodi-pi system
+        run: nix build .#nixosConfigurations.kodi-pi.config.system.build.toplevel --accept-flake-config
+
+      - name: Export system closure
+        run: |
+          nix-store --export $(nix-store -qR result) | zstd -T0 -3 > kodi-pi-closure.nar.zst
+
+      - name: Save toplevel path
+        run: |
+          readlink result > toplevel-path.txt
+
+      - name: Upload system closure
+        uses: actions/upload-artifact@v4
+        with:
+          name: kodi-pi-system
+          path: |
+            kodi-pi-closure.nar.zst
+            toplevel-path.txt
           retention-days: 90
