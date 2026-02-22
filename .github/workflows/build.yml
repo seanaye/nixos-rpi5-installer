@@ -34,6 +34,8 @@ jobs:
         run: nix build .#nixosConfigurations.kodi-pi.config.system.build.toplevel --accept-flake-config
 
       - name: Push to Cachix
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
         run: |
           cachix push seanaye $(nix-store -qR result)
 
