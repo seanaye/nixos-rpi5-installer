@@ -24,28 +24,29 @@ jobs:
             extra-substituters = https://nixos-raspberrypi.cachix.org
             extra-trusted-public-keys = nixos-raspberrypi.cachix.org-1:4iMO9LXa8BqhU+Rpg6LQKiGa2lsNh/j2oiYLNOQ5sPI=
 
-      - name: Setup Cachix
-        uses: cachix/cachix-action@v15
-        with:
-          name: seanaye
-          authToken: ${{ secrets.CACHIX_AUTH_TOKEN }}
-
       - name: Build kodi-pi system
         run: nix build .#nixosConfigurations.kodi-pi.config.system.build.toplevel --accept-flake-config
 
-      - name: Push to Cachix
-        env:
-          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
-        run: |
-          cachix push seanaye $(nix-store -qR result)
-
       - name: Save toplevel path
-        run: |
-          readlink result > toplevel-path.txt
+        run: readlink result > toplevel-path.txt
 
-      - name: Upload toplevel path
+      - name: Export system closure
+        run: nix-store --export $(nix-store -qR result) | zstd -T0 -3 > kodi-pi-closure.nar.zst
+
+      - name: Upload system closure
         uses: actions/upload-artifact@v4
         with:
           name: kodi-pi-system
-          path: toplevel-path.txt
+          path: |
+            kodi-pi-closure.nar.zst
+            toplevel-path.txt
           retention-days: 90
+
+      - name: Push to Cachix (optional)
+        continue-on-error: true
+        env:
+          CACHIX_AUTH_TOKEN: ${{ secrets.CACHIX_AUTH_TOKEN }}
+        run: |
+          if command -v cachix &> /dev/null && [ -n "$CACHIX_AUTH_TOKEN" ]; then
+            cachix push seanaye $(nix-store -qR result)
+          fi
