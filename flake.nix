@@ -16,7 +16,7 @@
       modules = [
         ({ nixos-raspberrypi, pkgs, lib, ... }:
         let
-          myKodi = pkgs.kodi-wayland.withPackages (kodiPkgs: with kodiPkgs; [
+          myKodi = pkgs.kodi-gbm.withPackages (kodiPkgs: with kodiPkgs; [
             jellyfin
           ]);
         in {
@@ -65,13 +65,19 @@
           services.pipewire.enable = false;
           services.pulseaudio.enable = false;
 
-          # Kodi via Cage (Wayland kiosk)
-          services.cage = {
-            enable = true;
-            user = "kodi";
-            program = "${myKodi}/bin/kodi-standalone";
-            environment = {
-              WLR_LIBINPUT_NO_DEVICES = "1";
+          # Kodi via GBM (direct DRM, no compositor needed)
+          systemd.services.kodi = {
+            description = "Kodi media center";
+            wantedBy = [ "multi-user.target" ];
+            after = [ "network-online.target" "sound.target" "systemd-user-sessions.service" ];
+            wants = [ "network-online.target" ];
+            serviceConfig = {
+              Type = "simple";
+              User = "kodi";
+              ExecStart = "${myKodi}/bin/kodi-standalone";
+              Restart = "always";
+              TimeoutStopSec = "15s";
+              TimeoutStopFailureMode = "kill";
             };
           };
 
@@ -99,6 +105,9 @@
               PermitRootLogin = "no";
             };
           };
+
+          # Accept unsigned store paths from local builds
+          nix.settings.require-sigs = false;
 
           # Networking
           networking.useDHCP = true;
